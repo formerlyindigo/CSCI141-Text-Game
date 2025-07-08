@@ -1,5 +1,6 @@
 class Game:
     #test
+    #basic version of movement
     def __init__(self):
         self.location = "town_square"
         self.locations = {
