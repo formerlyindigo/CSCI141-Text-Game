@@ -3,16 +3,40 @@ import random
 class Player:
     def __init__(self, name):
         self.name = name
+        self.level = 1
+        self.exp = 0
+        self.exp_to_level = 100
         self.hp = 100
         self.max_hp = 100
         self.attack = 10
         self.gold = 50
         self.inventory = []
         self.location = "town_square"
+        self.quests = {"Weirdos": 0}
     
-    def add_item(self, item):
-        self.inventory.append(item)
-        print(f"Added {item['name']} to inventory!")
+    def add_exp(self, amount):
+        self.exp += amount
+        if self.exp >= self.exp_to_level:
+            self.level_up()
+    
+    def level_up(self):
+        self.level += 1
+        self.exp -= self.exp_to_level
+        self.exp_to_level = int(self.exp_to_level * 1.5)
+        
+        self.max_hp += 20
+        self.hp = self.max_hp
+        self.attack += 5
+        
+        print(f"\n=== LEVEL UP! You're now level {self.level} ===")
+        print(f"HP: {self.max_hp}, ATK: {self.attack}")
+
+class Enemy:
+    def __init__(self, name, hp, attack, exp):
+        self.name = name
+        self.hp = hp
+        self.attack = attack
+        self.exp = exp
 
 class Item:
     def __init__(self, name, item_type, value, price=0):
@@ -21,20 +45,21 @@ class Item:
         self.value = value
         self.price = price
 
+#alright enough of the joke descriptions I like the weirdos though...
 class Game:
     def __init__(self):
         self.player = None
         self.locations = {
             "town_square": {
                 "name": "Town Square",
-                "description": "The town has four 90 degree angles with four sides that are equal with each other.",
+                "description": "You're in the bustling town square.",
                 "exits": {"north": "market", "east": "forest_entrance"},
                 "enemies": [],
                 "shop": []
             },
             "market": {
                 "name": "Marketplace",
-                "description": "I'm not making another bazaar joke.",
+                "description": "Colorful stalls line the streets.",
                 "exits": {"south": "town_square"},
                 "enemies": [],
                 "shop": [
@@ -44,13 +69,17 @@ class Game:
             },
             "forest_entrance": {
                 "name": "Forest Entrance",
-                "description": "A sign with thick trees mark the forest. There is no forest. Just the sign. Actually there are many signs. ",
+                "description": "Thick trees mark the entrance to the forest.",
                 "exits": {"west": "town_square"},
-                "enemies": [Enemy("Weirdo", 30, 8)],
+                "enemies": [Enemy("Weirdo", 30, 8, 25)],
                 "shop": []
             }
         }
+        self.quests = {
+            "Weirdos": {"target": 3, "reward": 100}
+        }
     
+
     
     def combat(self, enemy):
         while self.player.hp > 0 and enemy.hp > 0:
@@ -80,9 +109,20 @@ class Game:
                 print(f"\nYou defeated the {enemy.name}!")
                 gold_gained = random.randint(5, 15)
                 self.player.gold += gold_gained
-                print(f"Plundered {gold_gained} gold on the body! You sicko")
+                print(f"Found {gold_gained} gold on the body!")
+                
+                # Gain XP
+                self.player.add_exp(enemy.exp)
+                print(f"Gained {enemy.exp} XP!")
+                
+                # Update quest
+                if enemy.name == "Weirdo":
+                    self.player.quests["Weirdos"] += 1
+                    print(f"\nWeirdos defeated: {self.player.quests['Weirdos']}/{self.quests['Weirdos']['target']}")
+                
                 return
             
+            # Enemy attack
             enemy_damage = random.randint(enemy.attack - 2, enemy.attack + 2)
             self.player.hp -= enemy_damage
             print(f"The {enemy.name} hits you for {enemy_damage} damage!")
@@ -91,86 +131,37 @@ class Game:
                 print("\n=== YOU ARE DEFEATED! ===")
                 self.player.hp = 1
                 self.player.location = "town_square"
-                print("You wake up in the town square, badly wounded probably. You can't tell cause you're text.")
+                print("You wake up in the town square, badly wounded.")
                 return
     
-    def show_inventory(self):
-        if not self.player.inventory:
-            print("\nYour inventory is empty.")
-            return
-        
-        print("\n=== INVENTORY ===")
-        for item in self.player.inventory:
-            print(f"- {item.name} ({item.type})")
+    def display_status(self):
+        print(f"\n{self.player.name} - Level {self.player.level}")
+        print(f"HP: {self.player.hp}/{self.player.max_hp}")
+        print(f"EXP: {self.player.exp}/{self.player.exp_to_level}")
+        print(f"Gold: {self.player.gold}")
     
-    def use_item(self, item_name):
-        for item in self.player.inventory[:]:
-            if item.name.lower() == item_name:
-                if item.type == "consumable":
-                    self.player.hp = min(self.player.max_hp, self.player.hp + item.value)
-                    self.player.inventory.remove(item)
-                    print(f"Used {item.name}! Restored {item.value} HP.")
-                    return True
-        print("You tried using whatever that was. It doesn't exist.")
-        return False
-    
-    def shop(self):
-        loc = self.locations[self.player.location]
-        if not loc['shop']:
-            print("No shop here!")
-            return
+    def check_quests(self):
+        print("\n=== ACTIVE QUESTS ===")
+        weirdo_quest = self.player.quests["Weirdos"]
+        target = self.quests["Weirdos"]["target"]
+        print(f"Defeat Weirdos: {weirdo_quest}/{target}")
         
-        print("\n=== SHOP ===")
-        print("Items for sale:")
-        for i, item in enumerate(loc['shop'], 1):
-            print(f"{i}. {item.name} - {item.price} gold")
-        
-        print("\nYour gold:", self.player.gold)
-        print("[B]uy, [S]ell, [L]eave")
-        
-        while True:
-            action = input("Action: ").lower()
-            if action == "l":
-                return
-            elif action == "b":
-                try:
-                    choice = int(input("Enter item number: ")) - 1
-                    if 0 <= choice < len(loc['shop']):
-                        item = loc['shop'][choice]
-                        if self.player.gold >= item.price:
-                            self.player.gold -= item.price
-                            self.player.add_item(item)
-                        else:
-                            print("Not enough gold!")
-                    else:
-                        print("Invalid choice!")
-                except ValueError:
-                    print("Please enter a number.")
-            elif action == "s":
-                if not self.player.inventory:
-                    print("Inventory empty!")
-                    continue
-                
-                self.show_inventory()
-                item_name = input("Enter item name to sell: ").lower()
-                for item in self.player.inventory[:]:
-                    if item.name.lower() == item_name:
-                        sell_price = max(1, item.price // 2)
-                        self.player.gold += sell_price
-                        self.player.inventory.remove(item)
-                        print(f"Sold {item.name} for {sell_price} gold!")
-                        return
-                print("Item not found!")
+        if weirdo_quest >= target:
+            print("\n=== QUEST COMPLETE! ===")
+            reward = self.quests["Weirdos"]["reward"]
+            print(f"Reward: {reward} gold!")
+            self.player.gold += reward
+            self.player.quests["Weirdos"] = -1000  # Mark as completed
     
     def run(self):
-        print("=== TEXT RPG v3: INVENTORY & SHOPS ===")
+        print("=== TEXT RPG v4: LEVELING & QUESTS ===")
         self.create_character()
         
         while True:
             self.display_location()
             self.display_status()
             
-            command = input("\nCommand (move/attack/shop/inv/quit): ").lower()
+            command = input("\nCommand (move/attack/shop/inv/quests/quit): ").lower()
             
             if command == "quit":
                 print("Goodbye!")
@@ -192,6 +183,8 @@ class Game:
                     if use == "y":
                         item_name = input("Enter item name: ")
                         self.use_item(item_name)
+            elif command == "quests":
+                self.check_quests()
             else:
                 print("Invalid command!")
 
